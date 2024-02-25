@@ -1,5 +1,4 @@
 # Object detection model for detecting fish species in images
-#여기 OcTo로고 사진 또는 어플 실행사진 들어가면 좋을 거 같음
 
 ## Abstract
 This is OcTo's object detection model for processing user videos. It detects various types of fish encountered during diving from user videos. Trained with [YOLOv8](https://github.com/ultralytics/ultralytics), it can detect 53 species of fish, with a performance of Precision 0.727, Recall 0.624, and mAP50 0.665.
