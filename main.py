@@ -3,9 +3,9 @@ import os
 from flask import Flask, request, jsonify
 from google.cloud import storage
 from google.cloud import firestore
+import google.auth
 
 from ultralytics import YOLO
-import os
 
 import cv2
 
@@ -16,47 +16,15 @@ import uuid
 
 app = Flask(__name__)
 
-
-def authenticate_implicit_with_adc(project_id="your-google-cloud-project-id"):
-    """
-    When interacting with Google Cloud Client libraries, the library can auto-detect the
-    credentials to use.
-
-    // TODO(Developer):
-    //  1. Before running this sample,
-    //  set up ADC as described in https://cloud.google.com/docs/authentication/external/set-up-adc
-    //  2. Replace the project variable.
-    //  3. Make sure that the user account or service account that you are using
-    //  has the required permissions. For this sample, you must have "storage.buckets.list".
-    Args:
-        project_id: The project id of your Google Cloud project.
-    """
-
-    # This snippet demonstrates how to list buckets.
-    # *NOTE*: Replace the client created below with the client required for your application.
-    # Note that the credentials are not specified when constructing the client.
-    # Hence, the client library will look for credentials using ADC.
-    storage_client = storage.Client(project=project_id)
+# Authenticate
+credentials, project = google.auth.default()
 
 def download_blob(bucket_name, source_blob_name, destination_file_name):
-    """Downloads a blob from the bucket."""
-    # The ID of your GCS bucket
-    # bucket_name = "your-bucket-name"
 
-    # The ID of your GCS object
-    # source_blob_name = "storage-object-name"
-
-    # The path to which the file should be downloaded
-    # destination_file_name = "local/path/to/file"
-
-    storage_client = storage.Client()
+    storage_client = storage.Client(credentials=credentials, project=project)
 
     bucket = storage_client.bucket(bucket_name)
 
-    # Construct a client side representation of a blob.
-    # Note `Bucket.blob` differs from `Bucket.get_blob` as it doesn't retrieve
-    # any content from Google Cloud Storage. As we don't need additional data,
-    # using `Bucket.blob` is preferred here.
     blob = bucket.blob(source_blob_name)
     blob.download_to_filename(destination_file_name)
 
@@ -74,9 +42,6 @@ def video_analysis():
     video_name = data["video_name"]
     folder_uuid = str(uuid.uuid4())
 
-    # Authenticate with Google Cloud Storage
-    authenticate_implicit_with_adc()
-
     download_blob("diver-logbook-videos", video_name + ".mp4", video_name + ".mp4")
 
     arr = video_name.split('_')
@@ -88,16 +53,12 @@ def video_analysis():
     # get images folder path
     img_folder_path = os.path.join(os.getcwd(), "images")
     print(img_folder_path)
-    video_folder_path = os.path.join(os.getcwd(), "videos")
-    print(video_folder_path)
     results_images_folder_path = os.path.join(os.getcwd() ,folder_uuid)
     print(results_images_folder_path)
 
     # Create a folder to save the images
     if not os.path.exists(img_folder_path):
         os.makedirs(img_folder_path)
-    if not os.path.exists(video_folder_path):
-        os.makedirs(video_folder_path)
     if not os.path.exists(results_images_folder_path):
         os.makedirs(results_images_folder_path)
 
@@ -160,14 +121,23 @@ def video_analysis():
         blob.upload_from_filename(os.path.join(folder_uuid, file))
 
     # upload json to firestore
-    db = firestore.Client()
+    db = firestore.Client(credentials=credentials, project=project)
     doc_ref = db.collection("DetectedFishes").document(folder_uuid)
     doc_ref.set({
         'results': json_data,
     })
 
+    # after upload is done, delete video, images, and uuid folder
+    os.remove(video_name + ".mp4")
+    for file in os.listdir(img_folder_path):
+        os.remove(os.path.join(img_folder_path, file))
+    os.rmdir(img_folder_path)
+    for file in os.listdir(folder_uuid):
+        os.remove(os.path.join(folder_uuid, file))
+    os.rmdir(folder_uuid)
+
     # JSON 파일 저장
     return jsonify({"message": "Video analysis is complete."})
 
 if __name__ == "__main__":
-    app.run(debug=True, port=8080)
+    app.run(debug=True, host="0.0.0.0", port=8080)

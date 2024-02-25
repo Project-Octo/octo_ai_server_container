@@ -1,22 +1,19 @@
-# Use the official Python base image with version 3.11.6
 FROM python:3.11.6
 
-# Set the working directory inside the container
-WORKDIR /app
+ENV PYTHONUNBUFFERED True
 
-# Copy the requirements.txt file to the working directory
-COPY ./requirements.txt /app
+ENV APP_HOME /app
 
-# Install the project dependencies
-RUN pip install -r requirements.txt
+ENV PORT 8080
+
+WORKDIR $APP_HOME
+
+COPY . ./
+
+ENV GOOGLE_APPLICATION_CREDENTIALS /app/credentials.json
 
 RUN apt-get update && apt-get install ffmpeg libsm6 libxext6  -y
 
-# Copy the entire project to the working directory
-COPY . .
+RUN pip install --no-cache-dir --default-timeout=100 future -r requirements.txt
 
-# Expose the port on which the Flask app will run
-EXPOSE 8080
-
-# Set the entrypoint command to run the Flask app
-CMD ["python", "server.py"]
+CMD exec gunicorn --bind :$PORT --workers 1 --threads 8 --timeout 0 main:app
